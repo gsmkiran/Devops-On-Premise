@@ -1,7 +1,12 @@
 ## Continuous Delivery process for On-premise applications and infrastructure. Stepwise explanation.
 # Two simple microservices (HelloDevops and HelloWorld) - Developed in springboot application and nginx as web server.
-# Created docker files to deploy the applications and run on different environments
-# Jenkins file 
+# Created docker files to build multiple docker images 
+# Jenkins file works as pipeline as code to create jenkins job with multiple stages such as build, deploy to dev, test in dev, deploy to test, test in test, deploy to prod
+# Jenkins picks the code from the github url to build.
+# Jenkins file initiates the docker commands to create containers from the docker images and starts deploying the code to different regions as specified.
+# Once the code is deployed to dev region successfully, the tests are triggered to run on the respective docker dev/test containers
+# After the tests are passed, jenkins triggers the ansible playbook to build the configuration of the prod environment to deploy the microservices in the respective environment provisioned through the config, deploy yml files.
+# There is no monitoring system attached as there are no logging code written. 
 
 
 ## Docker Stuff
