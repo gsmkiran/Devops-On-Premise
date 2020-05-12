@@ -1,0 +1,146 @@
+#!groovy
+
+import groovy.json.JsonSlurper
+import java.net.URL
+
+pipeline {
+    agent none
+    options {
+        timeout(time: 1, unit: 'DAYS')
+        disableConcurrentBuilds()
+    }
+    stages {
+        stage("Build App") {
+            agent any 
+            steps { buildApp() }
+        }
+        stage("Deploy Image to Dev") {
+            agent any
+            steps { deployImage(env.ENVIRONMENT) }
+        }
+        stage("Test App in Dev") {
+            agent any
+            steps { runBrowserTest(env.ENVIRONMENT) }
+        }
+        stage("Deploy Image to Test") {
+            agent any
+            when { branch 'master' } 
+            steps { deployImage('test') }
+        }
+        stage("Test App in Test") {
+            agent any
+            when { branch 'master' } 
+            steps { runBrowserTest('test') }
+        }
+        stage("Proceed to prod?") {
+            agent none
+            when { branch 'master' } 
+            steps { proceedTo('prod') }
+        }
+        stage("Deploy Image to Prod") {
+            agent any
+            when { branch 'master' }
+            steps { deployImage('prod') }
+        }
+    }
+}
+
+// ================================================================================================
+// Build steps
+// ================================================================================================
+
+def buildApp() {
+     dir("webapp") {
+        withDockerContainer("maven:3.5.0-jdk-8-alpine") { sh "mvn clean install"}
+        archiveArtifacts '**/target/spring-boot-web-jsp-1.0.war'
+        step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'] )
+     }
+}
+
+
+// ================================================================================================
+// Deploy steps
+// ================================================================================================
+
+def deployImage(environment) {
+    def context = getContext(environment)
+    def ip = findIp(environment)
+    echo "Deploy ${env.IMAGE_NAME} to '${environment}' environment (in context: ${context})"
+    sshagent (credentials: ["${env.SYSTEM_NAME}-${context}-helloworld"]) {
+        sh """ssh -o StrictHostKeyChecking=no -tt \"ec2-user@${ip}\" \
+            sudo /opt/dso/deploy-app  \"${env.IMAGE_NAME}\" \"${env.REGISTRY_URL}\"
+"""
+    }
+    echo "Ensure site is up"
+     // TODO: Replace with wait loop that tests if the siste is responsive
+    sleep time: 10, unit: 'SECONDS'
+}
+
+def getContext(environment) {
+    return (env.BRANCH_NAME == 'master') ? environment : 'dev'
+}
+
+
+// ================================================================================================
+// Test steps
+// ================================================================================================
+
+def runSecurityTest() {
+    def sonarReportDir = "target/sonar"
+    def jenkinsIP = findJenkinsIp()
+    dir("webapp") {
+        withDockerContainer("maven:3.5.0-jdk-8-alpine")  {
+            sh "mvn sonar:sonar -Dsonar.host.url=http://${jenkinsIP}:9000"
+        }
+        sh "ls -al ${sonarReportDir}"
+        //archiveArtifacts "**/${sonarReportDir}/*.txt"
+     }
+}
+
+def runBrowserTest(environment) {
+    def ip = findIp(environment)
+    def workDir = "src/test"
+    def testsDir="${workDir}/python"
+    def resultsDir = "target/browser-test-results/${environment}"
+    def resultsPrefix = "${resultsDir}/results-${env.BUILD_ID}"
+    def sitePackagesDir="${workDir}/resources/lib/python2.6/site-packages"
+    def script = """
+        export PYTHONPATH="${sitePackagesDir}:${testsDir}"
+        mkdir -p ${resultsDir}
+        /usr/bin/python -B -u ./${testsDir}/Tests/java/MicroserviceTests \
+            "--base-url=http://${ip}" \
+            --webdriver-class=PhantomJS\
+            --reuse-driver \
+            --environment ${environment} \
+            --default-wait=15 \
+            --verbose \
+            --default-window-width=800 \
+            --test-reports-dir=${resultsDir} \
+            --results-file=${resultsPrefix}.csv
+"""
+    dir("webapp") {
+        withDockerContainer("killercentury/python-phantomjs") { sh "${script}" }
+        step([$class: 'JUnitResultArchiver', testResults: "**/${resultsDir}/TEST-*.xml"])
+        sh "ls -lhr ${resultsDir}"
+        archiveArtifacts "**/${resultsPrefix}.*"
+    }
+}
+
+// ================================================================================================
+// Utility steps
+// ================================================================================================
+
+def proceedTo(environment) {
+    def description = "Choose 'yes' if you want to deploy to this build to " + 
+        "the ${environment} environment"
+    def proceed = 'no'
+    timeout(time: 4, unit: 'HOURS') {
+        proceed = input message: "Do you want to deploy the changes to ${environment}?",
+            parameters: [choice(name: "Deploy to ${environment}", choices: "no\nyes",
+                description: description)]
+        if (proceed == 'no') {
+            error("User stopped pipeline execution")
+        }
+    }
+}
+

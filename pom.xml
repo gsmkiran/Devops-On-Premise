@@ -3,11 +3,18 @@
 	
 	<modelVersion>4.0.0</modelVersion>
 	
+	<groupId>test.hdms</groupId>
+	<artifactId>hdms-parent</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>HelloDevopsMicroservice</name>
+	<description>An example microservice project built on SringBoot Framework.</description>
+	<packaging>pom</packaging>
+
 	<groupId>test.hwms</groupId>
 	<artifactId>hwms-parent</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>HelloWorldMicroservice</name>
-	<description>An example microservice project built on Spark Framework.</description>
+	<description>An example microservice project built on SpringBoot Framework.</description>
 	<packaging>pom</packaging>
 
 	<licenses>
@@ -19,9 +26,7 @@
 	</licenses>
 	
 	<modules>
-		<module>HelloWorldMicroserviceCommon</module>
-		<module>HelloWorldMicroserviceService</module>
-		<module>HelloWorldMicroserviceWeb</module>
+		<module>HelloDevopsMicroserviceSpringBootWeb</module>
 		<module>HelloWorldMicroserviceSpringBootWeb</module>
 	</modules>
 	
