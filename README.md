@@ -9,7 +9,7 @@
 # There is no monitoring system attached as there are no logging code written. 
 
 
-## Docker Stuff
+## Docker Stuff.
 
 Create the user-defined bridge network (so we get embedded DNS):
 ```
